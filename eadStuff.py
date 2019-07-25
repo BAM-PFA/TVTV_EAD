@@ -1,4 +1,8 @@
+#!/usr/bin/env python3
+import csv
 from lxml import etree
+import os
+import sys
 
 class EAD:
 	def __init__(self,path):
@@ -23,10 +27,6 @@ class EAD:
 			'e':self.XMLNS
 			}
 
-
-# ead.xpath('/e:ead/e:archdesc',namespaces={'e': 'urn:isbn:1-931666-22-9'})
-
-# files = r.tree.xpath('//e:c[@level="file" or @level="item"]',namespaces=r.XPATH_NS_MAP)
 class FFT:
 	'''
 	TIND csv should have 
@@ -55,7 +55,6 @@ class ItemRow:
 		_269__a=None,
 		_264_0c=None,
 		_500__a=None
-
 		):
 		self.ID = ID
 		self._2480a = "cbpf_pfa-mss-008_{}".format(self.ID) # our manuscript identifier?
@@ -64,6 +63,7 @@ class ItemRow:
 		self._269__a = _269__a
 		self._264_0c = _264_0c
 		self._336__a = "Text"
+		self._500__a = _500__a
 		self._7001_a1 = "Michael Shamberg"
 		self._7001_e1 = "creator"
 		self._7001_a2 = "Megan Williams"
@@ -88,10 +88,10 @@ class ItemRow:
 			'''
 		self.FFTs=[]
 
-	def parse_FFTs(enumeration,URL):
+	def parse_FFTs(self):
 		pass
 
-	def check_headers(enumeration):
+	def check_headers(self):
 		pass
 
 def parse_EAD(filepath):
@@ -103,13 +103,70 @@ def parse_EAD(filepath):
 		'//e:c[@level="file" or @level="item"]',
 		namespaces=_ead.XPATH_NS_MAP
 		)
-	for item in items:
-		_id = item.get("id") # this is the ArchivesSpace ID
-		title = item.xpath("e:did/e:unittitle",namespaces=_ead.XPATH_NS_MAP)[0].text
-		_269 = None # WTF is this supposed to be?
+
+	return items,_ead
+
+def parse_item(item,_ead):
+	# parse individual folders or items from EAD XML
+	# items is a list of XPATH results
+	# for item in items:
+	_id = item.get("id") # this is the ArchivesSpace ID
+	_id = _id.replace("aspace_x711","")
+	title = item.xpath("e:did/e:unittitle",namespaces=_ead.XPATH_NS_MAP)[0].text
+	_269 = None # WTF is this supposed to be?
+	try:
 		_264 = item.xpath("e:did/e:unitdate",namespaces=_ead.XPATH_NS_MAP)[0].text
-		containers = item.xpath("e:did/e:container",namespaces=_ead.XPATH_NS_MAP)
-		boxLabel = containers[0].get("type")
-		boxNumber = containers[0].text
+	except:
+		_264 = ""
+	containers = item.xpath("e:did/e:container",namespaces=_ead.XPATH_NS_MAP)
+	boxLabel = containers[0].get("type")
+	boxNumber = containers[0].text
+	try:
 		folder = containers[1].get("type")
 		folderNumber = containers[1].text
+		boxFolder = "{} {}, {} {}".format(boxLabel, boxNumber,folder,folderNumber)
+	except:
+		boxFolder = "{} {}".format(boxLabel, boxNumber)
+
+	print(boxFolder)
+
+	row = ItemRow(
+		ID=_id,
+		_245__a=title,
+		_269__a=_269,
+		_264_0c=_264,
+		_500__a=boxFolder
+		)
+	row.parse_FFTs()
+
+	return row
+
+def parse_row(row):
+	row_data = "{}|{}|{}|{}".format(
+		row._245__a,
+		row._269__a,
+		row._264_0c,
+		row._500__a
+		) # ETC
+	return row_data
+
+def parse_item_list(items,_ead):
+	csvRaw = ""
+	for item in items:
+		row = parse_item(item,_ead)
+		row_data = parse_row(row)
+		csvRaw="{}\n{}".format(csvRaw,row_data)
+
+	return csvRaw
+
+def main():
+	EADfilepath = sys.argv[1]
+	items,_ead = parse_EAD(EADfilepath)
+
+	with open('out.csv','w+') as f:
+		csvRaw = parse_item_list(items,_ead)
+		f.write(csvRaw)
+
+if __name__ == "__main__":
+	main()
+
