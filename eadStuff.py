@@ -87,9 +87,15 @@ class ItemRow:
 			the Head of the Pacific Film Archive Library.
 			'''
 		self.FFTs=[]
+		self.imageEnumeration = None
 
-	def parse_FFTs(self):
-		pass
+	def parse_FFTs(self,jpegs):
+		if self._2480a in jpegs:
+			self.FFTs.extend(jpegs[self._2480a])
+			for x in self.FFTs:
+				x = "http://path/blah/{}".format(x)
+
+			self.imageEnumeration = len(self.FFTs)
 
 	def check_headers(self):
 		pass
@@ -106,7 +112,7 @@ def parse_EAD(filepath):
 
 	return items,_ead
 
-def parse_item(item,_ead):
+def parse_item(item,_ead,jpegs):
 	# parse individual folders or items from EAD XML
 	# items is a list of XPATH results
 	# for item in items:
@@ -137,23 +143,34 @@ def parse_item(item,_ead):
 		_264_0c=_264,
 		_500__a=boxFolder
 		)
-	row.parse_FFTs()
+	row.parse_FFTs(jpegs)
 
 	return row
 
+# def parse_row(row):
+# 	row_data = "{}|{}|{}|{}".format(
+# 		row._245__a,
+# 		row._269__a,
+# 		row._264_0c,
+# 		row._500__a
+# 		) # ETC
+# 	return row_data
+
 def parse_row(row):
-	row_data = "{}|{}|{}|{}".format(
+	row_data = [
 		row._245__a,
 		row._269__a,
 		row._264_0c,
 		row._500__a
-		) # ETC
+		] # ETC
+	for image in row.FFTs:
+		row_data.append(image)
 	return row_data
 
-def parse_item_list(items,_ead):
+def parse_item_list(items,_ead,jpegs):
 	csvRaw = ""
 	for item in items:
-		row = parse_item(item,_ead)
+		row = parse_item(item,_ead,jpegs)
 		row_data = parse_row(row)
 		csvRaw="{}\n{}".format(csvRaw,row_data)
 
@@ -163,8 +180,13 @@ def main():
 	EADfilepath = sys.argv[1]
 	items,_ead = parse_EAD(EADfilepath)
 
+	with open('files.json','r') as f:
+		# this is the folder of jpegs represented as JSON
+		# {ITEM:[jpeg1,jpeg2,etc],ITEM2:[etc]}
+		jpegs = json.load(f) 
+
 	with open('out.csv','w+') as f:
-		csvRaw = parse_item_list(items,_ead)
+		csvRaw = parse_item_list(items,_ead,jpegs)
 		f.write(csvRaw)
 
 if __name__ == "__main__":
