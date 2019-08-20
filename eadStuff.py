@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import csv
+import json
 from lxml import etree
 import os
 import sys
@@ -27,34 +28,14 @@ class EAD:
 			'e':self.XMLNS
 			}
 
-class FFT:
-	'''
-	TIND csv should have 
-	FFT__a-1 [this is the URL to the first item, http://path1.jpg]
-	FFT__n-1 [this is the enumeration of the first item, e.g. 1]
-	FFT__a-2 [this is the URL to the second item, http://path2.jpg]
-	FFT__n-2 [this is the enumeration of the second item, e.g. 2]
-
-	there will need to be a check in the list of headers whether 
-	the header needs to be added as there can be an arbitrary number of
-	JPGs associated with an item (which is represented by one row)
-	'''
-	def __init__(self,enumeration=None,URL=None):
-		self.enumeration = enumeration
-		self.URL = URL
-
-		self.headerA = "FFT__a-{}".format(self.enumeration)
-		self.headerN = "FFT__n-{}".format(self.enumeration)
-
-
 class ItemRow:
 	def __init__(
 		self,
 		ID=None,
-		_245__a=None,
-		_269__a=None,
-		_264_0c=None,
-		_500__a=None
+		_245__a="",
+		_269__a="",
+		_264_0c="",
+		_500__a=""
 		):
 		self.ID = ID
 		self._2480a = "cbpf_pfa-mss-008_{}".format(self.ID) # our manuscript identifier?
@@ -79,23 +60,26 @@ class ItemRow:
 		self._982__b = "Top Value Television papers, 1964-2004 (bulk 1971-1977)"
 		self._852__a = "UC Berkeley Art Museum and Pacific Film Archive Film Library and Study Center"
 		self.linkToFindingAid = "https://oac.cdlib.org/findaid/ark:/13030/c87m0fns/"
-		self._542__a = '''
-			Property rights reside with the Berkeley Art Museum and Pacific 
-			Film Archive, University of California, Berkeley. Literary 
-			rights are retained by the creators of the records and their 
-			heirs. For permission to reproduce or publish, please contact 
-			the Head of the Pacific Film Archive Library.
-			'''
+		self._542__a = (
+			"Property rights reside with the Berkeley Art Museum and Pacific "\
+			"Film Archive, University of California, Berkeley. Literary "\
+			"rights are retained by the creators of the records and their "\
+			"heirs. For permission to reproduce or publish, please contact "\
+			"the Head of the Pacific Film Archive Library."\
+			)
 		self.FFTs=[]
 		self.imageEnumeration = None
 
 	def parse_FFTs(self,jpegs):
-		if self._2480a in jpegs:
-			self.FFTs.extend(jpegs[self._2480a])
-			for x in self.FFTs:
-				x = "http://path/blah/{}".format(x)
+		# get the dict like this: {cbpf_id:{image1,image2}}
+		for k,v in jpegs.items():
+			if self._2480a in k:
+				for jpg in v:
+					# print(jpg)
+					jpgURI = "http://digitalassets.lib.berkeley.edu/tvtv/ucb/images/{}".format(jpg)
+					self.FFTs.append(jpgURI)
 
-			self.imageEnumeration = len(self.FFTs)
+				# self.imageEnumeration = len(self.FFTs)
 
 	def check_headers(self):
 		pass
@@ -134,7 +118,7 @@ def parse_item(item,_ead,jpegs):
 	except:
 		boxFolder = "{} {}".format(boxLabel, boxNumber)
 
-	print(boxFolder)
+	# print(boxFolder)
 
 	row = ItemRow(
 		ID=_id,
@@ -147,47 +131,74 @@ def parse_item(item,_ead,jpegs):
 
 	return row
 
-# def parse_row(row):
-# 	row_data = "{}|{}|{}|{}".format(
-# 		row._245__a,
-# 		row._269__a,
-# 		row._264_0c,
-# 		row._500__a
-# 		) # ETC
-# 	return row_data
-
 def parse_row(row):
 	row_data = [
+		row._2480a,
+		row._035__a,
 		row._245__a,
 		row._269__a,
 		row._264_0c,
+		row._336__a,
+		row._7001_a1,
+		row._7001_e1,
+		row._7001_a2,
+		row._7001_e2,
+		row._7001_a3,
+		row._7001_e3,
+		row._7001_a4,
+		row._7001_e4,
+		row._980__a,
+		row._982__a,
+		row._982__b,
+		row._852__a,
+		row.linkToFindingAid,
+		row._542__a,
 		row._500__a
-		] # ETC
+]
 	for image in row.FFTs:
 		row_data.append(image)
+		row_data.append(str(row.FFTs.index(image)+1))
+	# print(row_data)
 	return row_data
 
-def parse_item_list(items,_ead,jpegs):
-	csvRaw = ""
-	for item in items:
-		row = parse_item(item,_ead,jpegs)
-		row_data = parse_row(row)
-		csvRaw="{}\n{}".format(csvRaw,row_data)
+def do_csv(items,_ead,jpegs):
+	with open("out.csv","w+") as f:
+		out = csv.writer(f)
+		for item in items:
+			row = parse_item(item,_ead,jpegs)
+			row_data = parse_row(row)
+			out.writerow(row_data)
 
-	return csvRaw
+
+def read_jpegs(path):
+	# this returns the folder of jpegs represented as dict
+	# {ITEM1[jpeg1,jpeg2,etc],ITEM2:[etc]}
+	jpegs = {}
+	for root,dirs,files in os.walk(path):
+		for _dir in dirs:
+			jpegs[_dir] = []
+			for jpg in os.listdir(os.path.join(root,_dir)):
+				jpegs[_dir].append(jpg)
+
+	return jpegs
+
+def add_ffts():
+	# gets the columns needed for the FFT columns
+	g = g = "FFT__a-x\tFFT__n-x"
+	for t in range(1,350):
+		r = g.replace('x',str(t))
+		u += "\t"+r
+	with open('ffts.txt','w') as f:
+		f.write(u)
 
 def main():
 	EADfilepath = sys.argv[1]
+	imageFolderPath = sys.argv[2]
+
 	items,_ead = parse_EAD(EADfilepath)
+	jpegs = read_jpegs(imageFolderPath) 
 
-	with open('files.json','r') as f:
-		# this is the folder of jpegs represented as JSON
-		# {ITEM:[jpeg1,jpeg2,etc],ITEM2:[etc]}
-		jpegs = json.load(f) 
-
-	with open('out.csv','w+') as f:
-		csvRaw = parse_item_list(items,_ead,jpegs)
-		f.write(csvRaw)
+	do_csv(items,_ead,jpegs)
 
 if __name__ == "__main__":
 	main()
