@@ -3,7 +3,11 @@ import csv
 import json
 from lxml import etree
 import os
+import pandas
 import sys
+
+# manual processes: headers are copied from sample csv
+# I know there need to be 349 FFT columns.....
 
 class EAD:
 	def __init__(self,path):
@@ -71,18 +75,19 @@ class ItemRow:
 		self.imageEnumeration = None
 
 	def parse_FFTs(self,jpegs):
-		# get the dict like this: {cbpf_id:{image1,image2}}
+		# take in the dict like this: {cbpf_id:{image1,image2}}
+		# return a list of images with full URI and filename
 		for k,v in jpegs.items():
 			if self._2480a in k:
 				for jpg in v:
 					# print(jpg)
 					jpgURI = "http://digitalassets.lib.berkeley.edu/tvtv/ucb/images/{}".format(jpg)
 					self.FFTs.append(jpgURI)
-
-				# self.imageEnumeration = len(self.FFTs)
-
-	def check_headers(self):
-		pass
+					self.FFTs.append(jpg)
+					# add the current count of images 
+					# for the TIND enumeration of each image
+					self.FFTs.append(str(sum('http://' in img for img in self.FFTs)))
+		# print(self.FFTs)
 
 def parse_EAD(filepath):
 	_ead = EAD(filepath)
@@ -157,13 +162,14 @@ def parse_row(row):
 ]
 	for image in row.FFTs:
 		row_data.append(image)
-		row_data.append(str(row.FFTs.index(image)+1))
 	# print(row_data)
 	return row_data
 
 def do_csv(items,_ead,jpegs):
+	headers = get_headers()
 	with open("out.csv","w+") as f:
 		out = csv.writer(f)
+		out.writerow(headers)
 		for item in items:
 			row = parse_item(item,_ead,jpegs)
 			row_data = parse_row(row)
@@ -182,14 +188,18 @@ def read_jpegs(path):
 
 	return jpegs
 
-def add_ffts():
+def get_headers():
+	# headers for TIND defined in main library's sample
+	headers = ["02480a","035__a","245__a","269__a","260__c","336__a","7001_a-1","7001_e-1","7001_a-2","7001_e-2","7001_a-3","7001_e-3","7001_a-4","7001_e-4","980__a","982__a","982__b","852__a","Link to Finding Aid","542__f","500__a"]
+
 	# gets the columns needed for the FFT columns
-	g = g = "FFT__a-x\tFFT__n-x"
+	# I know there need to be 349 of them.
 	for t in range(1,350):
-		r = g.replace('x',str(t))
-		u += "\t"+r
-	with open('ffts.txt','w') as f:
-		f.write(u)
+		headers.append("FFT__a-"+str(t))
+		headers.append("FFT__d-"+str(t))
+		headers.append("FFT__n-"+str(t))
+
+	return headers
 
 def main():
 	EADfilepath = sys.argv[1]
